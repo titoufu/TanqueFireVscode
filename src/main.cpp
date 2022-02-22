@@ -1,16 +1,5 @@
 
 #include <dummy.h>
-/**
-   Created by K. Suwatchai (Mobizt)
-
-   Email: k_suwatchai@hotmail.com
-
-   Github: https://github.com/mobizt
-
-   Copyright (c) 2021 mobizt
-
-*/
-
 #if defined(ESP32)
 #include <WiFi.h>
 #include <FirebaseESP32.h>
@@ -60,24 +49,6 @@ void buzina();
 
 void streamCallback(StreamData data)
 {
-  /* Serial.printf("stream path, %s\nevent path, %s\ndata type, %s\nevent type, %s\n\n",
-                 data.streamPath().c_str(),
-                 data.dataPath().c_str(),
-                 data.dataType().c_str(),
-                 data.eventType().c_str());
-                 */
-  printResult(data); // see addons/RTDBHelper.h
-  Serial.println();
-
-  // This is the size of stream payload received (current and max value)
-  // Max payload size is the payload size under the stream path since the stream connected
-  // and read once and will not update until stream reconnection takes place.
-  // This max value will be zero as no payload received in case of ESP8266 which
-  // BearSSL reserved Rx buffer size is less than the actual stream payload.
-  Serial.printf("Received stream payload size: %d (Max. %d)\n\n", data.payloadLength(), data.maxPayloadLength());
-
-  // Due to limited of stack memory, do not perform any task that used large memory here especially starting connect to server.
-  // Just set this flag and check it status later.
   dataChanged = true;
 }
 void streamTimeoutCallback(bool timeout)
@@ -126,29 +97,28 @@ void setup()
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   stream.setBSSLBufferSize(2048 /* Rx in bytes, 512 - 16384 */, 512 /* Tx in bytes, 512 - 16384 */);
-  if (!Firebase.beginStream(stream, "/Comunica/comando"))
+  /*
+    if (Firebase.ready())
+    {
+      Firebase.setString(fbdo, "status", "Tanque Conectado");
+    }
+       delay(500);
+       Firebase.getString(fbdo, "/Comunica/comando");
+       comando = fbdo.to<String>();
+       Firebase.getString(fbdo, "/Comunica/resposta");
+       resposta = fbdo.to<String>();
+       Serial.printf("Comando:  %s    ---  Resposta:  %s\n", comando.c_str(), resposta.c_str());
+
+       Firebase.getString(fbdo, "/Modo/nivel");
+       nivel = fbdo.to<String>();
+       Firebase.getString(fbdo, "/Modo/programa");
+       programa = fbdo.to<String>();
+    */
+  if (!Firebase.beginStream(stream, "Tanque/comando"))
     Serial.printf("stream begin error, %s\n\n", stream.errorReason().c_str());
 
   Firebase.setStreamCallback(stream, streamCallback, streamTimeoutCallback);
   Firebase.setDoubleDigits(5);
-  if (Firebase.ready())
-  {
-    sendDataPrevMillis = millis();
-
-    Firebase.getString(fbdo, "/Comunica/comando");
-    comando = fbdo.to<String>();
-    Firebase.getString(fbdo, "/Comunica/resposta");
-    resposta = fbdo.to<String>();
-    Serial.printf("Comando:  %s    ---  Resposta:  %s\n", comando.c_str(), resposta.c_str());
-
-    Firebase.getString(fbdo, "/Modo/nivel");
-    nivel = fbdo.to<String>();
-    Firebase.getString(fbdo, "/Modo/programa");
-    programa = fbdo.to<String>();
-    Serial.printf("Nivel:  %s    ---  Programa:  %s\n", nivel.c_str(), programa.c_str());
-
-    delay(100);
-  }
 }
 
 void loop()
@@ -157,25 +127,26 @@ void loop()
   if (dataChanged)
   {
     dataChanged = false;
-    Firebase.getString(fbdo, "/Comunica/comando");
+    Firebase.setString(fbdo, "Tanque/status", "Tanque Conectado");
+    Firebase.getString(fbdo, "Tanque/comando");
     String comando = fbdo.to<String>();
     if (comando.compareTo("LIGAR") == 0)
     {
-      Firebase.set(fbdo, "/Comunica/resposta", "LIGAR: SIM ou NÃO ?");
+      Firebase.set(fbdo, "Tanque/resposta", "LIGAR: SIM ou NÃO ?");
       confirmaSegunda = true;
     }
     else if (comando.compareTo("SIM") == 0 && confirmaSegunda)
     {
       confirmaSegunda = false;
-      Firebase.setString(fbdo, "/Comunica/resposta", "LIGADO");
-      Firebase.getString(fbdo, "/Modo/nivel");
+      Firebase.setString(fbdo, "Tanque/resposta", "LIGADO");
+      Firebase.getString(fbdo, "Tanque/nivel");
       nivel = fbdo.to<String>();
-      Firebase.getString(fbdo, "/Modo/programa");
+      Firebase.getString(fbdo, "Tanque/programa");
       programa = fbdo.to<String>();
       SeMexe(programa);
-      Firebase.setString(fbdo, "/Comunica/resposta", "CICLO ENCERRADO");
-      Firebase.setString(fbdo, "/Comunica/comando", "AGUARDANDO COMANDO!!");
-     }
+      Firebase.setString(fbdo, "Tanque/resposta", "CICLO ENCERRADO");
+      Firebase.setString(fbdo, "Tanque/comando", "AGUARDANDO COMANDO!!");
+    }
   }
 }
 
@@ -213,8 +184,7 @@ boolean Encher(String nivel)
     {
       delay(10);
       digitalWrite(AGUA, LIGA);
-      delay(10);
-      Serial.println("Enchendo");
+      delay(100);
     }
   }
   break;
@@ -224,8 +194,7 @@ boolean Encher(String nivel)
     {
       delay(10);
       digitalWrite(AGUA, LIGA);
-      delay(10);
-      Serial.println("Enchendo");
+      delay(100);
     }
   }
   break;
@@ -235,8 +204,7 @@ boolean Encher(String nivel)
     {
       delay(10);
       digitalWrite(AGUA, LIGA);
-      delay(10);
-      Serial.println("Enchendo");
+      delay(100);
     }
   }
   break;
@@ -258,12 +226,10 @@ boolean Drenar()
      1.1 - Acima do nível sensor=0 e Abaixo do nivel sensor = 1
 
   */
-  long unsigned int timeDreno;
-  int DT = 40; // tempo que fica ligado depois de atingir o nível zero.
-  digitalWrite(AGUA, DESLIGA);
+  long unsigned int timeDreno, DT;
+  DT = 40; // tempo que fica ligado depois de atingir o nível zero.digitalWrite(AGUA, DESLIGA);
   digitalWrite(MOTOR, DESLIGA);
   digitalWrite(DRENO, LIGA);
-  Serial.println("Drenando");
   while (!digitalRead(NIVEL_BAIXO))
   {
     delay(100);
@@ -285,7 +251,6 @@ boolean Molho(int DT)
      DT - tempo do molho em minutos
   */
   Encher(nivel);
-  Serial.println("Inicia o molho");
   long unsigned int Time_Molho = millis() / 1000 + DT * 60;
   while (millis() / 1000 < Time_Molho)
   {
@@ -302,7 +267,6 @@ boolean Bater(int DT)
       DT - tempo de bater em minutos
   */
   Encher(nivel);
-  Serial.println("Inicia Bater ...");
   long unsigned int Time_Bater = millis() / 1000 + DT * 60;
   digitalWrite(MOTOR, LIGA);
   while (millis() / 1000 < Time_Bater)
@@ -317,8 +281,6 @@ boolean Bater(int DT)
 
 boolean SeMexe(String programa)
 {
-  boolean drenado = false, cheio = false;
-
   byte Programa = 10;
 
   if (programa.equals(String("CICLO_LONGO")))
@@ -333,14 +295,15 @@ boolean SeMexe(String programa)
   {
     Programa = 2;
   }
-  else if (programa.equals(String("ESVAZIAR")))
+  else if (programa.equals(String("CICLO_ESVAZIAR")))
   {
     Programa = 3;
   }
-  else if (programa.equals(String("ENCHER")))
+  else if (programa.equals(String("CICLO_ENCHER")))
   {
     Programa = 4;
   }
+
   switch (Programa)
   {
   case 0: //  Muita Suja. (5342-3322-2422) =>  => CICLO_LONGO
@@ -381,15 +344,12 @@ boolean SeMexe(String programa)
 
     break;
   case 3: // Drenar.
-    if (!drenado)
-      drenado = Drenar();
+    Drenar();
     break;
   case 4: // Encher
-    if (!cheio)
-      cheio = Encher(nivel);
+    Encher(nivel);
     break;
   }
-  Serial.println("FIM");
   buzina();
   noTone(BUZZER);
   return true;
