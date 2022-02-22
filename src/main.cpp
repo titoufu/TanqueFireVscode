@@ -9,7 +9,7 @@
 #endif
 #include <FireConfig.h>
 
-/**********************************************/
+/***************  ********************/
 
 #define LIGA LOW
 #define DESLIGA HIGH
@@ -17,7 +17,6 @@
 #define NIVEL_ALTO D0
 #define NIVEL_MEDIO D1
 #define NIVEL_BAIXO D2
-
 #define MOTOR D5
 #define DRENO D6
 #define AGUA D7
