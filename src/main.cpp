@@ -1,12 +1,11 @@
-
-#include <dummy.h>
-#if defined(ESP32)
-#include <WiFi.h>
-#include <FirebaseESP32.h>
-#elif defined(ESP8266)
+//#include <dummy.h>
+//#if defined(ESP32)
+//#include <WiFi.h>
+//#include <FirebaseESP32.h>
+//#elif defined(ESP8266)
 #include <ESP8266WiFi.h>
 #include <FirebaseESP8266.h>
-#endif
+//#endif
 #include <FireConfig.h>
 
 /***************  ********************/
@@ -21,6 +20,7 @@
 #define DRENO D6
 #define AGUA D7
 #define BUZZER D8
+#define CONECTA D9
 boolean P0[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 boolean P1[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 boolean P2[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -53,10 +53,12 @@ void streamCallback(StreamData data)
 void streamTimeoutCallback(bool timeout)
 {
   if (timeout)
-    Serial.println("stream timed out, resuming...\n");
-
+  { // Serial.println("stream timed out, resuming...\n");
+  }
   if (!stream.httpConnected())
-    Serial.printf("error code: %d, reason: %s\n\n", stream.httpCode(), stream.errorReason().c_str());
+  {
+    // Serial.printf("error code: %d, reason: %s\n\n", stream.httpCode(), stream.errorReason().c_str());
+  }
 }
 
 void setup()
@@ -73,21 +75,23 @@ void setup()
   pinMode(NIVEL_MEDIO, INPUT);
   pinMode(NIVEL_BAIXO, INPUT);
   pinMode(BUZZER, OUTPUT);
+  pinMode(CONECTA, OUTPUT);
+  digitalWrite(CONECTA, LIGA);
 
-  Serial.begin(115200);
+  // Serial.begin(74800);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("Connecting to Wi-Fi");
+  // Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED)
   {
-    Serial.print(".");
+    // Serial.print(".");
     delay(300);
   }
-  Serial.println();
-  Serial.print("Connected with IP: ");
-  Serial.println(WiFi.localIP());
-  Serial.println();
-  Serial.printf("Firebase Client v%s\n\n", FIREBASE_CLIENT_VERSION);
-
+  digitalWrite(CONECTA, DESLIGA);
+  // Serial.println();
+  // Serial.print("Connected with IP: ");
+  // Serial.println(WiFi.localIP());
+  // Serial.println();
+  // Serial.printf("Firebase Client v%s\n\n", FIREBASE_CLIENT_VERSION);
   config.api_key = API_KEY;
   auth.user.email = USER_EMAIL;
   auth.user.password = USER_PASSWORD;
@@ -96,27 +100,29 @@ void setup()
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   stream.setBSSLBufferSize(2048 /* Rx in bytes, 512 - 16384 */, 512 /* Tx in bytes, 512 - 16384 */);
+
+  if (Firebase.ready())
+  {
+    Firebase.setString(fbdo, "Tanque/resposta", "CICLO ENCERRADO");
+    Firebase.setString(fbdo, "Tanque/status", "Tanque Conectado");
+  }
   /*
-    if (Firebase.ready())
-    {
-      Firebase.setString(fbdo, "status", "Tanque Conectado");
-    }
-       delay(500);
-       Firebase.getString(fbdo, "/Comunica/comando");
-       comando = fbdo.to<String>();
-       Firebase.getString(fbdo, "/Comunica/resposta");
-       resposta = fbdo.to<String>();
-       Serial.printf("Comando:  %s    ---  Resposta:  %s\n", comando.c_str(), resposta.c_str());
+     delay(500);
+     Firebase.getString(fbdo, "/Comunica/comando");
+     comando = fbdo.to<String>();
+     Firebase.getString(fbdo, "/Comunica/resposta");
+     resposta = fbdo.to<String>();
+     //Serial.printf("Comando:  %s    ---  Resposta:  %s\n", comando.c_str(), resposta.c_str());
 
-       Firebase.getString(fbdo, "/Modo/nivel");
-       nivel = fbdo.to<String>();
-       Firebase.getString(fbdo, "/Modo/programa");
-       programa = fbdo.to<String>();
-    */
+     Firebase.getString(fbdo, "/Modo/nivel");
+     nivel = fbdo.to<String>();
+     Firebase.getString(fbdo, "/Modo/programa");
+     programa = fbdo.to<String>();
+  */
   if (!Firebase.beginStream(stream, "Tanque/comando"))
-    Serial.printf("stream begin error, %s\n\n", stream.errorReason().c_str());
+    // Serial.printf("stream begin error, %s\n\n", stream.errorReason().c_str());
 
-  Firebase.setStreamCallback(stream, streamCallback, streamTimeoutCallback);
+    Firebase.setStreamCallback(stream, streamCallback, streamTimeoutCallback);
   Firebase.setDoubleDigits(5);
 }
 
@@ -136,6 +142,7 @@ void loop()
     }
     else if (comando.compareTo("SIM") == 0 && confirmaSegunda)
     {
+      digitalWrite(BUZZER, true);
       confirmaSegunda = false;
       Firebase.setString(fbdo, "Tanque/resposta", "LIGADO");
       Firebase.getString(fbdo, "Tanque/nivel");
@@ -145,6 +152,7 @@ void loop()
       SeMexe(programa);
       Firebase.setString(fbdo, "Tanque/resposta", "CICLO ENCERRADO");
       Firebase.setString(fbdo, "Tanque/comando", "AGUARDANDO COMANDO!!");
+      digitalWrite(BUZZER, false);
     }
   }
 }
@@ -302,6 +310,10 @@ boolean SeMexe(String programa)
   {
     Programa = 4;
   }
+  else if (programa.equals(String("CICLO_ENXAGUAR")))
+  {
+    Programa = 5;
+  }
 
   switch (Programa)
   {
@@ -347,6 +359,10 @@ boolean SeMexe(String programa)
     break;
   case 4: // Encher
     Encher(nivel);
+    break;
+  case 5: // Enxaguar
+    Bater(1);
+    Drenar();
     break;
   }
   buzina();
