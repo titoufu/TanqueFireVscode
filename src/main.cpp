@@ -8,6 +8,14 @@
 //#endif
 #include <FireConfig.h>
 
+/************/
+#define __DEBUG__
+#ifdef __DEBUG__
+#define DEBUG(...) printf(__VA_ARGS__)
+#else
+#define DEBUG(...)
+#endif
+
 /***************  ********************/
 
 #define LIGA LOW
@@ -53,7 +61,8 @@ void streamCallback(StreamData data)
 void streamTimeoutCallback(bool timeout)
 {
   if (timeout)
-  { // Serial.println("stream timed out, resuming...\n");
+  {
+    // Serial.println("stream timed out, resuming...\n");
   }
   if (!stream.httpConnected())
   {
@@ -79,6 +88,7 @@ void setup()
   digitalWrite(CONECTA, LIGA);
 
   // Serial.begin(74800);
+  Serial1.begin(74800); // veja nas vizinhanças da linha 133, procure por Serial1.printf(  )
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   // Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED)
@@ -112,7 +122,7 @@ void setup()
      comando = fbdo.to<String>();
      Firebase.getString(fbdo, "/Comunica/resposta");
      resposta = fbdo.to<String>();
-     //Serial.printf("Comando:  %s    ---  Resposta:  %s\n", comando.c_str(), resposta.c_str());
+     Serial.printf("Comando:  %s    ---  Resposta:  %s\n", comando.c_str(), resposta.c_str());
 
      Firebase.getString(fbdo, "/Modo/nivel");
      nivel = fbdo.to<String>();
@@ -120,9 +130,8 @@ void setup()
      programa = fbdo.to<String>();
   */
   if (!Firebase.beginStream(stream, "Tanque/comando"))
-    // Serial.printf("stream begin error, %s\n\n", stream.errorReason().c_str());
-
-    Firebase.setStreamCallback(stream, streamCallback, streamTimeoutCallback);
+    Serial1.printf("stream begin error, %s\n\n", stream.errorReason().c_str()); // comando importante p/ Firebase!
+  Firebase.setStreamCallback(stream, streamCallback, streamTimeoutCallback);
   Firebase.setDoubleDigits(5);
 }
 
@@ -152,6 +161,8 @@ void loop()
       SeMexe(programa);
       Firebase.setString(fbdo, "Tanque/resposta", "CICLO ENCERRADO");
       Firebase.setString(fbdo, "Tanque/comando", "AGUARDANDO COMANDO!!");
+      buzina();
+      noTone(BUZZER);
       digitalWrite(BUZZER, false);
     }
   }
@@ -187,31 +198,28 @@ boolean Encher(String nivel)
   {
   case 1:
   {
+    digitalWrite(AGUA, LIGA);
     while (digitalRead(NIVEL_ALTO))
     {
       delay(10);
-      digitalWrite(AGUA, LIGA);
-      delay(100);
     }
   }
   break;
   case 2:
   {
+    digitalWrite(AGUA, LIGA);
     while (digitalRead(NIVEL_MEDIO))
     {
       delay(10);
-      digitalWrite(AGUA, LIGA);
-      delay(100);
     }
   }
   break;
   case 3:
   {
+    digitalWrite(AGUA, LIGA);
     while (digitalRead(NIVEL_BAIXO))
     {
       delay(10);
-      digitalWrite(AGUA, LIGA);
-      delay(100);
     }
   }
   break;
@@ -357,16 +365,15 @@ boolean SeMexe(String programa)
   case 3: // Drenar.
     Drenar();
     break;
-  case 4: // Encher
+  case 4: // Encher e Deixar de Molho.
     Encher(nivel);
+    Bater(1);
     break;
   case 5: // Enxaguar
     Bater(1);
     Drenar();
     break;
   }
-  buzina();
-  noTone(BUZZER);
   return true;
 }
 
@@ -379,7 +386,7 @@ void buzina()
   {
     tone(BUZZER, 200);
     delay(200);
-    tone(BUZZER, 0); // colocar 10 segundos aqui => tone(BUZZER, 10)
+    tone(BUZZER, 10); // colocar 10 segundos aqui => tone(BUZZER, 10)
     delay(200);
   }
 }
